@@ -551,7 +551,7 @@ func (v *VoiceConnection) wsHeartbeat(wsConn *websocket.Conn, close <-chan struc
 type voiceUDPData struct {
 	Address string `json:"address"` // Public IP of machine running this code
 	Port    uint16 `json:"port"`    // UDP Port of machine running this code
-	Mode    string `json:"mode"`    // always "xsalsa20_poly1305"
+	Mode    string `json:"mode"`    // encryption mode, must be one of the modes provided by OP2
 }
 
 type voiceUDPD struct {
@@ -646,7 +646,28 @@ func (v *VoiceConnection) udpOpen() (err error) {
 
 	// Take the data from above and send it back to Discord to finalize
 	// the UDP connection handshake.
-	data := voiceUDPOp{1, voiceUDPD{"udp", voiceUDPData{ip, port, "xsalsa20_poly1305"}}}
+	// Discord sends a list of supported encryption modes in OP2.
+	// To avoid \"Unknown encryption mode\" (4016) errors, we MUST choose
+	// one of the modes from that list.
+	// По возможности выбираем классический xsalsa20_poly1305, иначе берём первый доступный.
+	mode := "xsalsa20_poly1305"
+	if len(v.op2.Modes) > 0 {
+		modeFound := false
+		for _, m := range v.op2.Modes {
+			if m == "xsalsa20_poly1305" {
+				mode = m
+				modeFound = true
+				break
+			}
+		}
+		if !modeFound {
+			// Фоллбек: используем первый режим из списка, который прислал Discord,
+			// чтобы как минимум пройти handhshake и не получить 4016.
+			mode = v.op2.Modes[0]
+		}
+	}
+
+	data := voiceUDPOp{1, voiceUDPD{"udp", voiceUDPData{ip, port, mode}}}
 
 	v.wsMutex.Lock()
 	err = v.wsConn.WriteJSON(data)
