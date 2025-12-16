@@ -667,6 +667,8 @@ func (v *VoiceConnection) udpOpen() (err error) {
 		}
 	}
 
+	v.log(LogInformational, "voice udpOpen using mode %s, server modes: %v", mode, v.op2.Modes)
+
 	data := voiceUDPOp{1, voiceUDPD{"udp", voiceUDPData{ip, port, mode}}}
 
 	v.wsMutex.Lock()
